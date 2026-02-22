@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Installments Pro</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+:root{
+--primary:#1e3c72;
+--secondary:#2a5298;
+--card:#ffffff;
+}
+
+body{
+margin:0;
+font-family:'Cairo',sans-serif;
+background:linear-gradient(135deg,var(--primary),var(--secondary));
+color:#fff;
+}
+
+header{
+padding:20px;
+text-align:center;
+background:rgba(0,0,0,0.2);
+}
+
+.container{
+width:95%;
+max-width:1400px;
+margin:auto;
+padding:20px;
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+gap:15px;
+}
+
+.card{
+background:var(--card);
+color:#333;
+padding:20px;
+border-radius:15px;
+box-shadow:0 10px 25px rgba(0,0,0,0.3);
+}
+
+input,select,button{
+width:100%;
+padding:10px;
+margin:6px 0;
+border-radius:8px;
+border:1px solid #ccc;
+}
+
+button{
+background:var(--secondary);
+color:#fff;
+font-weight:bold;
+cursor:pointer;
+border:none;
+}
+
+button:hover{opacity:0.9}
+
+.table{
+width:100%;
+border-collapse:collapse;
+}
+
+.table th,.table td{
+padding:8px;
+border-bottom:1px solid #ddd;
+text-align:center;
+}
+
+.late{
+background:#f8d7da;
+}
+
+.theme{
+display:flex;
+gap:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>?? My Installments Pro</h1>
+</header>
+
+<div class="container">
+
+<!-- Dashboard Stats -->
+<div class="grid">
+<div class="card"><h3 id="totalSales">0</h3><p>≈Ã„«·Ì «·„»Ì⁄« </p></div>
+<div class="card"><h3 id="totalPaid">0</h3><p>≈Ã„«·Ì «·„Õ’·</p></div>
+<div class="card"><h3 id="totalRemaining">0</h3><p>≈Ã„«·Ì «·„ »ﬁÌ</p></div>
+<div class="card"><h3 id="lateCount">0</h3><p>√ﬁ”«ÿ „ √Œ—…</p></div>
+</div>
+
+<br>
+
+<!-- Chart -->
+<div class="card">
+<canvas id="chart"></canvas>
+</div>
+
+<br>
+
+<!-- Add Customer -->
+<div class="card">
+<h3>≈÷«›… ⁄„Ì·</h3>
+<input id="name" placeholder="«”„ «·⁄„Ì·">
+<input id="phone" placeholder="—ﬁ„ «·Â« ›">
+<input type="number" id="sale" placeholder="”⁄— «·»Ì⁄">
+<input type="number" id="down" placeholder="«·œ›⁄… «·√Ê·Ï">
+<input type="number" id="monthly" placeholder="ﬁÌ„… «·ﬁ”ÿ «·‘Â—Ì">
+<input type="number" id="months" placeholder="⁄œœ «·√‘Â—">
+<input type="date" id="startDate">
+<button onclick="addCustomer()">Õ›Ÿ</button>
+</div>
+
+<br>
+
+<!-- Customers Table -->
+<div class="card">
+<h3>«·⁄„·«¡</h3>
+<table class="table">
+<thead>
+<tr>
+<th>«·«”„</th>
+<th>«·„ »ﬁÌ</th>
+<th> ›«’Ì·</th>
+<th>PDF</th>
+<th>Ê« ”«»</th>
+</tr>
+</thead>
+<tbody id="customerTable"></tbody>
+</table>
+</div>
+
+<br>
+
+<!-- Theme -->
+<div class="card">
+<h3> €ÌÌ— «·√·Ê«‰</h3>
+<div class="theme">
+<button onclick="setTheme('#1e3c72','#2a5298')">√“—ﬁ</button>
+<button onclick="setTheme('#11998e','#38ef7d')">√Œ÷—</button>
+<button onclick="setTheme('#c31432','#240b36')">√Õ„—</button>
+<button onclick="setTheme('#6a11cb','#2575fc')">»‰›”ÃÌ</button>
+</div>
+</div>
+
+</div>
+
+<script>
+
+let customers = JSON.parse(localStorage.getItem("customers")) || [];
+
+function save(){
+localStorage.setItem("customers",JSON.stringify(customers));
+}
+
+function setTheme(p,s){
+document.documentElement.style.setProperty('--primary',p);
+document.documentElement.style.setProperty('--secondary',s);
+}
+
+function addCustomer(){
+let name=name.value;
+let phone=phone.value;
+let sale=parseFloat(sale.value);
+let down=parseFloat(down.value);
+let monthly=parseFloat(monthly.value);
+let months=parseInt(months.value);
+let startDate=new Date(startDate.value);
+
+let installments=[];
+for(let i=1;i<=months;i++){
+let due=new Date(startDate);
+due.setMonth(due.getMonth()+i);
+installments.push({
+dueDate:due.toISOString().split("T")[0],
+amount:monthly,
+paid:false
+});
+}
+
+customers.push({name,phone,sale,down,monthly,installments});
+save();
+render();
+}
+
+function render(){
+let table=document.getElementById("customerTable");
+table.innerHTML="";
+let totalSales=0,totalPaid=0,totalRemaining=0,late=0;
+
+customers.forEach((c,index)=>{
+
+let remaining=0;
+c.installments.forEach(i=>{
+if(i.paid) totalPaid+=i.amount;
+else{
+remaining+=i.amount;
+let today=new Date().toISOString().split("T")[0];
+if(i.dueDate<today) late++;
+}
+});
+
+totalSales+=c.sale;
+totalRemaining+=remaining;
+
+table.innerHTML+=`
+<tr>
+<td>${c.name}</td>
+<td>${remaining}</td>
+<td><button onclick="showDetails(${index})">⁄—÷</button></td>
+<td><button onclick="exportPDF(${index})">PDF</button></td>
+<td><button onclick="sendWhats(${index})">Ê« ”«»</button></td>
+</tr>
+`;
+});
+
+document.getElementById("totalSales").innerText=totalSales;
+document.getElementById("totalPaid").innerText=totalPaid;
+document.getElementById("totalRemaining").innerText=totalRemaining;
+document.getElementById("lateCount").innerText=late;
+
+updateChart(totalPaid,totalRemaining);
+save();
+}
+
+function showDetails(index){
+let c=customers[index];
+let msg="”Ã· «·œ›⁄« :\n";
+c.installments.forEach(i=>{
+msg+=`${i.dueDate} - ${i.amount} - ${i.paid?"„œ›Ê⁄":"€Ì— „œ›Ê⁄"}\n`;
+});
+alert(msg);
+}
+
+function sendWhats(index){
+let c=customers[index];
+let msg=`„—Õ»« ${c.name} ?? ‰–ﬂ—ﬂ„ »ÊÃÊœ √ﬁ”«ÿ „” Õﬁ….`;
+window.open(`https://wa.me/${c.phone}?text=${encodeURIComponent(msg)}`);
+}
+
+function exportPDF(index){
+const { jsPDF } = window.jspdf;
+let doc=new jsPDF();
+let c=customers[index];
+
+doc.text(" ﬁ—Ì—  ﬁ”Ìÿ ‘«„·",70,20);
+doc.text("«·«”„: "+c.name,20,40);
+doc.text("«·Â« ›: "+c.phone,20,50);
+
+let y=70;
+c.installments.forEach(i=>{
+doc.text(`${i.dueDate} | ${i.amount} | ${i.paid?"„œ›Ê⁄":"€Ì— „œ›Ê⁄"}`,20,y);
+y+=10;
+});
+
+doc.save("Report.pdf");
+}
+
+let chart;
+
+function updateChart(paid,remaining){
+if(chart) chart.destroy();
+chart=new Chart(document.getElementById("chart"),{
+type:"doughnut",
+data:{
+labels:["„Õ’·","„ »ﬁÌ"],
+datasets:[{
+data:[paid,remaining],
+backgroundColor:["#28a745","#dc3545"]
+}]
+}
+});
+}
+
+render();
+
+</script>
+
+</body>
+</html>
